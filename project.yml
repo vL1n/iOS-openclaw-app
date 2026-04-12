@@ -1,0 +1,73 @@
+name: OpenClawOperator
+options:
+  bundleIdPrefix: ai.openclaw
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_PREVIEWS: YES
+targets:
+  OpenClawCore:
+    type: framework
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.openclaw.core
+        PRODUCT_NAME: OpenClawCore
+        SKIP_INSTALL: YES
+  OpenClawOperator:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    dependencies:
+      - target: OpenClawCore
+    sources:
+      - path: OpenClawOperatorApp
+    info:
+      path: OpenClawOperatorApp/Resources/Info.plist
+    entitlements:
+      path: OpenClawOperatorApp/Resources/OpenClawOperator.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.openclaw.operator
+        PRODUCT_NAME: OpenClaw Operator
+        INFOPLIST_KEY_CFBundleDisplayName: OpenClaw
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIBackgroundModes:
+          - remote-notification
+        INFOPLIST_KEY_NSUserNotificationsUsageDescription: OpenClaw Operator uses notifications to surface new messages, approvals, and health alerts from your self-hosted gateway.
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        TARGETED_DEVICE_FAMILY: 1,2
+        CODE_SIGN_ENTITLEMENTS: OpenClawOperatorApp/Resources/OpenClawOperator.entitlements
+  OpenClawCoreTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Tests/OpenClawCoreTests
+    dependencies:
+      - target: OpenClawCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.openclaw.core.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: ""
+schemes:
+  OpenClawOperator:
+    build:
+      targets:
+        OpenClawOperator: all
+        OpenClawCore: all
+        OpenClawCoreTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - OpenClawCoreTests
