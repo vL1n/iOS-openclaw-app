@@ -1,4 +1,5 @@
 import Observation
+import OpenClawCore
 import SwiftData
 import SwiftUI
 import UIKit
