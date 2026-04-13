@@ -102,9 +102,11 @@ final class AppModel {
         self.pushManager = pushManager
     }
 
-    deinit {
+    func shutdown() {
         connectionTask?.cancel()
+        connectionTask = nil
         routeTask?.cancel()
+        routeTask = nil
     }
 
     func bootstrap() async {

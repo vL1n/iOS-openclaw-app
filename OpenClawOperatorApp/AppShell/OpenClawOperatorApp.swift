@@ -7,6 +7,7 @@ import UIKit
 @main
 struct OpenClawOperatorApp: App {
     @UIApplicationDelegateAdaptor(OpenClawAppDelegate.self) private var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @State private var appModel: AppModel
     private let container: ModelContainer
 
@@ -43,6 +44,11 @@ struct OpenClawOperatorApp: App {
                 .environment(appModel)
                 .task {
                     await appModel.bootstrap()
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .background {
+                        appModel.shutdown()
+                    }
                 }
         }
         .modelContainer(container)
