@@ -40,12 +40,13 @@ targets:
         PRODUCT_NAME: OpenClaw Operator
         INFOPLIST_FILE: OpenClawOperatorApp/Resources/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: OpenClaw
+        INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIBackgroundModes:
           - remote-notification
         INFOPLIST_KEY_NSUserNotificationsUsageDescription: OpenClaw Operator uses notifications to surface new messages, approvals, and health alerts from your self-hosted gateway.
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-        TARGETED_DEVICE_FAMILY: 1,2
+        TARGETED_DEVICE_FAMILY: 1
         CODE_SIGN_ENTITLEMENTS: OpenClawOperatorApp/Resources/OpenClawOperator.entitlements
   OpenClawCoreTests:
     type: bundle.unit-test
