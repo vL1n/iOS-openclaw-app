@@ -11,9 +11,9 @@ enum AppTab: Hashable {
 
 struct GatewayProfileDraft: Sendable {
     var name = "My OpenClaw"
-    var endpoint = "wss://openclaw.example.com/gateway"
-    var transportMode: TransportMode = .secureWebSocket
-    var allowInsecureLocal = false
+    var endpoint = "ws://10.84.1.2:18789"
+    var transportMode: TransportMode = .localWebSocket
+    var allowInsecureLocal = true
     var requestedScopes = "chat,sessions,ops,push"
 
     init() {}

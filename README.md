@@ -33,6 +33,7 @@ Native SwiftUI operator client scaffold for a self-hosted OpenClaw gateway.
 - The live client expects `JSON-RPC 2.0` style envelopes over WebSocket.
 - `wss://` is required for remote access. `ws://` only works when `allowInsecureLocal` is enabled in Settings and the profile transport mode is switched to `Trusted Local WebSocket`.
 - The app bundle identifier is currently `ai.openclaw.operator`. Update it alongside `project.yml` and the APNs credentials you configure on the server side.
+- The default local development gateway is `ws://10.84.1.2:18789` with trusted local WebSocket enabled.
 
 ## How to open it
 
