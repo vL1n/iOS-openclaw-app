@@ -9,9 +9,22 @@ public actor MockGatewayClient: GatewayClientProtocol {
     private var messagesBySession: [String: [ChatMessageItem]]
     private var sessions: [ChatSessionSummary]
 
+    public init() {
+        self.sessions = Self.defaultSessions
+        self.messagesBySession = Self.defaultMessages
+
+        let connectionParts = AsyncStream.makeStream(of: GatewayConnectionState.self)
+        self.connectionUpdates = connectionParts.stream
+        self.connectionContinuation = connectionParts.continuation
+
+        let eventParts = AsyncStream.makeStream(of: GatewayServerEvent.self)
+        self.serverEvents = eventParts.stream
+        self.eventContinuation = eventParts.continuation
+    }
+
     public init(
-        sessions: [ChatSessionSummary] = MockGatewayClient.defaultSessions,
-        messagesBySession: [String: [ChatMessageItem]] = MockGatewayClient.defaultMessages
+        sessions: [ChatSessionSummary],
+        messagesBySession: [String: [ChatMessageItem]]
     ) {
         self.sessions = sessions
         self.messagesBySession = messagesBySession
