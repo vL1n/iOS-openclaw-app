@@ -5,112 +5,150 @@ struct OpsFeature: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                if !model.canAccessOps {
-                    ContentUnavailableView(
-                        "当前连接没有 Ops 能力",
-                        systemImage: "lock.slash",
-                        description: Text("如果这是基础 scope 的 token，聊天仍可使用；需要更多 scopes 才会看到运维卡片。")
-                    )
-                } else if let snapshot = model.opsSnapshot {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        MetricCard(title: "Gateway", value: snapshot.gatewayHealth.rawValue.capitalized, tint: snapshot.gatewayHealth == .healthy ? .green : .orange)
-                        MetricCard(title: "Nodes", value: "\(snapshot.nodeCount)", tint: .blue)
-                        MetricCard(title: "Approvals", value: "\(snapshot.pendingApprovals)", tint: .orange)
-                        MetricCard(title: "Tokens Today", value: "\(snapshot.usageSummary.tokensToday)", tint: .purple)
+        ZStack {
+            ClawBackground()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ClawHeader(
+                        eyebrow: "Ops Matrix",
+                        title: "Gateway",
+                        subtitle: model.connectionSummary,
+                        actionSystemImage: "arrow.clockwise"
+                    ) {
+                        Task { await model.refreshOps() }
                     }
 
-                    SectionBlock(title: "Active Models") {
-                        ForEach(snapshot.modelStatus, id: \.self) { modelStatus in
-                            Label(modelStatus, systemImage: "cpu.fill")
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    if !model.canAccessOps {
+                        ClawEmptyState(
+                            title: "当前连接没有 Ops 能力",
+                            message: "如果这是基础 scope 的 token，聊天仍可使用；需要更多 scopes 才会看到运维卡片。",
+                            systemImage: "lock.slash"
+                        )
+                    } else if let snapshot = model.opsSnapshot {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            MetricCard(title: "Gateway", value: snapshot.gatewayHealth.rawValue.capitalized, systemImage: "antenna.radiowaves.left.and.right", tint: snapshot.gatewayHealth == .healthy ? OpenClawTheme.neon : OpenClawTheme.amber)
+                            MetricCard(title: "Nodes", value: "\(snapshot.nodeCount)", systemImage: "point.3.connected.trianglepath.dotted", tint: OpenClawTheme.blue)
+                            MetricCard(title: "Approvals", value: "\(snapshot.pendingApprovals)", systemImage: "checkmark.seal", tint: OpenClawTheme.amber)
+                            MetricCard(title: "Tokens", value: "\(snapshot.usageSummary.tokensToday)", systemImage: "bolt.horizontal.circle", tint: Color(red: 0.82, green: 0.56, blue: 1.0))
                         }
-                    }
 
-                    SectionBlock(title: "Online Nodes") {
-                        ForEach(snapshot.onlineNodes) { node in
-                            HStack {
-                                Label(node.name, systemImage: "desktopcomputer")
-                                Spacer()
-                                Text(node.status)
-                                    .foregroundStyle(.secondary)
+                        SectionBlock(title: "Active Models", systemImage: "cpu.fill") {
+                            ForEach(snapshot.modelStatus, id: \.self) { modelStatus in
+                                MatrixRow(title: modelStatus, detail: "ready", systemImage: "circle.hexagongrid.fill", tint: OpenClawTheme.neon)
                             }
-                            .padding(.vertical, 4)
                         }
-                    }
 
-                    SectionBlock(title: "Pending Approvals") {
-                        ForEach(snapshot.approvals) { approval in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(approval.title)
-                                    .font(.subheadline.weight(.semibold))
-                                Text("Risk: \(approval.risk)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        SectionBlock(title: "Online Nodes", systemImage: "network") {
+                            ForEach(snapshot.onlineNodes) { node in
+                                MatrixRow(title: node.name, detail: node.status, systemImage: "desktopcomputer", tint: node.status == "online" ? OpenClawTheme.neon : OpenClawTheme.amber)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 4)
                         }
+
+                        SectionBlock(title: "Pending Approvals", systemImage: "exclamationmark.shield") {
+                            ForEach(snapshot.approvals) { approval in
+                                MatrixRow(title: approval.title, detail: "risk \(approval.risk)", systemImage: "shield.lefthalf.filled", tint: OpenClawTheme.amber)
+                            }
+                        }
+                    } else {
+                        ClawEmptyState(
+                            title: "暂无运维快照",
+                            message: "连接网关后点右上角刷新，就会拉取健康状态、在线节点和 approvals。",
+                            systemImage: "waveform.path.ecg"
+                        )
                     }
-                } else {
-                    ContentUnavailableView(
-                        "暂无运维快照",
-                        systemImage: "waveform.path.ecg",
-                        description: Text("连接网关后点右上角刷新，就会拉取健康状态、在线节点和 approvals。")
-                    )
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 22)
+                .padding(.bottom, 28)
             }
-            .padding()
+            .scrollIndicators(.hidden)
         }
-        .background(Color(red: 0.98, green: 0.98, blue: 0.99))
-        .navigationTitle("Ops")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await model.refreshOps() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
 private struct MetricCard: View {
     let title: String
     let value: String
+    let systemImage: String
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(tint)
+        ClawCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(tint)
+                    Spacer()
+                    Circle()
+                        .fill(tint)
+                        .frame(width: 7, height: 7)
+                }
+                Text(value)
+                    .font(.system(size: 28, weight: .black, design: .rounded))
+                    .foregroundStyle(OpenClawTheme.text)
+                    .minimumScaleFactor(0.7)
+                Text(title.uppercased())
+                    .font(.system(.caption2, design: .monospaced).weight(.bold))
+                    .tracking(1.4)
+                    .foregroundStyle(OpenClawTheme.secondaryText)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 
 private struct SectionBlock<Content: View>: View {
     let title: String
-    @ViewBuilder let content: Content
+    let systemImage: String
+    private let content: Content
+
+    init(title: String, systemImage: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content()
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.headline)
+        ClawCard {
+            HStack {
+                Label(title, systemImage: systemImage)
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(OpenClawTheme.text)
+                Spacer()
+            }
+            .padding(.bottom, 4)
+
             VStack(alignment: .leading, spacing: 8) {
                 content
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+}
+
+private struct MatrixRow: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.14), in: Circle())
+            Text(title)
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(OpenClawTheme.text)
+                .lineLimit(1)
+            Spacer()
+            Text(detail.uppercased())
+                .font(.system(.caption2, design: .monospaced).weight(.bold))
+                .foregroundStyle(OpenClawTheme.secondaryText)
+        }
+        .padding(.vertical, 6)
     }
 }

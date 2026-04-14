@@ -6,48 +6,58 @@ struct RootView: View {
     var body: some View {
         @Bindable var model = model
 
-        return TabView(selection: $model.selectedTab) {
-            NavigationStack {
-                ChatFeature()
-            }
-            .tabItem {
-                Label("Chat", systemImage: "bubble.left.and.text.bubble.right.fill")
-            }
-            .tag(AppTab.chat)
+        return ZStack {
+            ClawBackground()
 
-            NavigationStack {
-                SessionsFeature()
-            }
-            .tabItem {
-                Label("Sessions", systemImage: "rectangle.stack.person.crop.fill")
-            }
-            .tag(AppTab.sessions)
+            TabView(selection: $model.selectedTab) {
+                NavigationStack {
+                    ChatFeature()
+                }
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .tabItem {
+                    Label("Chat", systemImage: "bubble.left.and.text.bubble.right.fill")
+                }
+                .tag(AppTab.chat)
 
-            NavigationStack {
-                OpsFeature()
-            }
-            .tabItem {
-                Label("Ops", systemImage: "waveform.path.ecg.rectangle.fill")
-            }
-            .tag(AppTab.ops)
+                NavigationStack {
+                    SessionsFeature()
+                }
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .tabItem {
+                    Label("Sessions", systemImage: "rectangle.stack.person.crop.fill")
+                }
+                .tag(AppTab.sessions)
 
-            NavigationStack {
-                SettingsFeature()
+                NavigationStack {
+                    OpsFeature()
+                }
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .tabItem {
+                    Label("Ops", systemImage: "waveform.path.ecg.rectangle.fill")
+                }
+                .tag(AppTab.ops)
+
+                NavigationStack {
+                    SettingsFeature()
+                }
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .tabItem {
+                    Label("Settings", systemImage: "slider.horizontal.3")
+                }
+                .tag(AppTab.settings)
             }
-            .tabItem {
-                Label("Settings", systemImage: "gearshape.2.fill")
-            }
-            .tag(AppTab.settings)
+            .tint(OpenClawTheme.neon)
         }
-        .tint(Color(red: 0.07, green: 0.45, blue: 0.69))
+        .preferredColorScheme(.dark)
         .overlay(alignment: .top) {
             if let bannerMessage = model.bannerMessage {
                 Text(bannerMessage)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.white)
+                    .font(.system(.footnote, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(OpenClawTheme.text)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color.black.opacity(0.72), in: Capsule())
+                    .background(OpenClawTheme.panelStrong, in: Capsule())
+                    .overlay(Capsule().stroke(OpenClawTheme.neon.opacity(0.55), lineWidth: 1))
                     .padding(.top, 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }

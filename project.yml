@@ -47,6 +47,7 @@ targets:
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: OpenClaw needs local network access to connect to your self-hosted gateway on your LAN.
         INFOPLIST_KEY_NSUserNotificationsUsageDescription: OpenClaw Operator uses notifications to surface new messages, approvals, and health alerts from your self-hosted gateway.
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
         TARGETED_DEVICE_FAMILY: 1
         CODE_SIGN_ENTITLEMENTS: OpenClawOperatorApp/Resources/OpenClawOperator.entitlements
   OpenClawCoreTests:
