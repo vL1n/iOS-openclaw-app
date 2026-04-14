@@ -94,24 +94,28 @@ public actor GatewayClient: GatewayClientProtocol {
             let scopes = profile.requestedScopes
             let identity = GatewayDeviceIdentityStore.loadOrCreate()
             let signedAtMs = Int(Date().timeIntervalSince1970 * 1000)
-            let clientID = deviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "openclaw-ios-operator"
-                : deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let clientID = "openclaw-ios"
+            let instanceID = deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
             let clientMode = "ui"
             let platform = "ios"
             let deviceFamily = "iphone"
 
+            var clientInfo: [String: JSONValue] = [
+                "id": .string(clientID),
+                "displayName": .string("OpenClaw iPhone"),
+                "version": .string("0.1.0"),
+                "platform": .string(platform),
+                "mode": .string(clientMode),
+                "deviceFamily": .string(deviceFamily)
+            ]
+            if !instanceID.isEmpty {
+                clientInfo["instanceId"] = .string(instanceID)
+            }
+
             var connectParams: [String: JSONValue] = [
                 "minProtocol": .number(3),
                 "maxProtocol": .number(3),
-                "client": .object([
-                    "id": .string(clientID),
-                    "displayName": .string("OpenClaw iPhone"),
-                    "version": .string("0.1.0"),
-                    "platform": .string(platform),
-                    "mode": .string(clientMode),
-                    "deviceFamily": .string(deviceFamily)
-                ]),
+                "client": .object(clientInfo),
                 "role": .string(role),
                 "scopes": .array(scopes.map(JSONValue.string)),
                 "caps": .array([]),

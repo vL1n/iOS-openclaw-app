@@ -7,10 +7,34 @@ public protocol GatewayTransport: Sendable {
     func receive() async throws -> JSONValue
 }
 
-public enum GatewayTransportError: Error, Sendable {
+public enum GatewayTransportError: LocalizedError, Sendable {
     case invalidURL
     case disconnected
+    case closed(code: Int, reason: String?, underlying: String?)
     case unsupportedMessage
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Gateway URL 无效。"
+        case .disconnected:
+            return "Gateway WebSocket 已断开。"
+        case .closed(let code, let reason, let underlying):
+            let trimmedReason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let trimmedReason, !trimmedReason.isEmpty {
+                return "Gateway WebSocket 已关闭 (code \(code)): \(trimmedReason)"
+            }
+
+            let trimmedUnderlying = underlying?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let trimmedUnderlying, !trimmedUnderlying.isEmpty {
+                return "Gateway WebSocket 已关闭 (code \(code)): \(trimmedUnderlying)"
+            }
+
+            return "Gateway WebSocket 已关闭 (code \(code))。"
+        case .unsupportedMessage:
+            return "Gateway 返回了不支持的 WebSocket 消息类型。"
+        }
+    }
 }
 
 public actor URLSessionWebSocketTransport: GatewayTransport {
@@ -54,7 +78,17 @@ public actor URLSessionWebSocketTransport: GatewayTransport {
             throw GatewayTransportError.disconnected
         }
 
-        let message = try await task.receive()
+        let message: URLSessionWebSocketTask.Message
+        do {
+            message = try await task.receive()
+        } catch {
+            let reason = task.closeReason.flatMap { String(data: $0, encoding: .utf8) }
+            throw GatewayTransportError.closed(
+                code: task.closeCode.rawValue,
+                reason: reason,
+                underlying: error.localizedDescription
+            )
+        }
         let data: Data
 
         switch message {

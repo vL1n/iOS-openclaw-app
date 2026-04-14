@@ -34,13 +34,17 @@ public struct JSONRPCRequest: Sendable, Hashable {
     }
 }
 
-public struct JSONRPCError: Error, Sendable, Hashable {
+public struct JSONRPCError: LocalizedError, Sendable, Hashable {
     public var code: Int
     public var message: String
 
     public init(code: Int, message: String) {
         self.code = code
         self.message = message
+    }
+
+    public var errorDescription: String? {
+        code == -1 ? message : "[\(code)] \(message)"
     }
 }
 
