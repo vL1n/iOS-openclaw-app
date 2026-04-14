@@ -66,8 +66,8 @@ struct SettingsFeature: View {
                             ActionButton(title: "Connect", systemImage: "link") {
                                 Task { await model.connect() }
                             }
-                            .disabled(model.authToken.isEmpty || model.isWorking)
-                            .opacity(model.authToken.isEmpty || model.isWorking ? 0.45 : 1)
+                            .disabled(model.isWorking)
+                            .opacity(model.isWorking ? 0.45 : 1)
 
                             ActionButton(title: "Refresh", systemImage: "arrow.clockwise") {
                                 Task { await model.refreshAll() }

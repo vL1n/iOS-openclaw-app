@@ -38,6 +38,38 @@ import Testing
     #expect(reconnecting.retryCount == 1)
 }
 
+@Test func openClawRequestEnvelopeUsesGatewayFrameShape() {
+    let request = JSONRPCRequest(
+        id: "req-1",
+        method: "connect",
+        params: ["role": .string("operator")]
+    )
+
+    let object = request.payload.objectValue ?? [:]
+
+    #expect(object["type"] == .string("req"))
+    #expect(object["id"] == .string("req-1"))
+    #expect(object["method"] == .string("connect"))
+    #expect(object["jsonrpc"] == nil)
+}
+
+@Test func deviceAuthPayloadV3MatchesGatewayFormat() {
+    let payload = GatewayDeviceAuthPayload.buildV3(
+        deviceId: "device-1",
+        clientId: "client-1",
+        clientMode: "ui",
+        role: "operator",
+        scopes: ["operator.read", "operator.write"],
+        signedAtMs: 123,
+        token: "token-1",
+        nonce: "nonce-1",
+        platform: "iOS",
+        deviceFamily: "iPhone"
+    )
+
+    #expect(payload == "v3|device-1|client-1|ui|operator|operator.read,operator.write|123|token-1|nonce-1|ios|iphone")
+}
+
 @Test func repositoryFallsBackToCachedMessagesAfterSendFailure() async throws {
     let client = MockGatewayClient()
     let repository = GatewayOperatorRepository(client: client)

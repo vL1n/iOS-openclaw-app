@@ -15,10 +15,24 @@ public protocol GatewayClientProtocol: Sendable {
     func registerPush(token: String, environment: String, bundleID: String, deviceID: String) async throws -> PushRegistration
 }
 
-public enum GatewayClientError: Error, Sendable {
+public enum GatewayClientError: LocalizedError, Sendable {
     case invalidTransport(String)
     case unauthorized
     case malformedResponse(String)
+    case challengeTimeout
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidTransport(let message):
+            return message
+        case .unauthorized:
+            return "Gateway 认证失败，请检查 Token 或配对状态。"
+        case .malformedResponse(let message):
+            return message
+        case .challengeTimeout:
+            return "等待 Gateway connect.challenge 超时，请确认 WebSocket URL 指向 OpenClaw Gateway。"
+        }
+    }
 }
 
 public actor GatewayClient: GatewayClientProtocol {
@@ -31,6 +45,8 @@ public actor GatewayClient: GatewayClientProtocol {
     private var requestCounter = 0
     private var receiveTask: Task<Void, Never>?
     private var pendingResponses: [String: CheckedContinuation<JSONValue, Error>] = [:]
+    private var latestChallenge: [String: JSONValue]?
+    private var challengeContinuation: CheckedContinuation<[String: JSONValue], Error>?
     private var connectionContinuation: AsyncStream<GatewayConnectionState>.Continuation
     private var eventContinuation: AsyncStream<GatewayServerEvent>.Continuation
 
@@ -53,25 +69,92 @@ public actor GatewayClient: GatewayClientProtocol {
     public func connect(profile: GatewayProfile, token: String, deviceID: String) async throws {
         try validate(profile: profile)
 
+        let authToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        challengeContinuation?.resume(throwing: GatewayTransportError.disconnected)
+        challengeContinuation = nil
+        latestChallenge = nil
+
         await publishState(.startConnecting)
 
-        try await transport.connect(url: profile.endpointURL, headers: [
-            "Authorization": "Bearer \(token)",
-            "X-OpenClaw-Role": "operator"
-        ])
+        do {
+            var headers = ["X-OpenClaw-Role": "operator"]
+            if !authToken.isEmpty {
+                headers["Authorization"] = "Bearer \(authToken)"
+            }
+            try await transport.connect(url: profile.endpointURL, headers: headers)
 
-        startReceiveLoopIfNeeded()
-        await publishState(.challengeReceived)
+            startReceiveLoopIfNeeded()
+            let challenge = try await waitForChallenge()
+            guard let connectNonce = challenge["nonce"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !connectNonce.isEmpty else {
+                throw GatewayClientError.malformedResponse("Gateway connect.challenge 缺少 nonce。")
+            }
 
-        let helloResponse = try await invoke(method: connectMethod, params: [
-            "role": .string("operator"),
-            "scopes": .array(profile.requestedScopes.map(JSONValue.string)),
-            "deviceId": .string(deviceID)
-        ])
+            let role = "operator"
+            let scopes = profile.requestedScopes
+            let identity = GatewayDeviceIdentityStore.loadOrCreate()
+            let signedAtMs = Int(Date().timeIntervalSince1970 * 1000)
+            let clientID = deviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "openclaw-ios-operator"
+                : deviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let clientMode = "ui"
+            let platform = "ios"
+            let deviceFamily = "iphone"
 
-        let capabilities = extractCapabilities(from: helloResponse)
-        await publishState(.authenticated(capabilities))
-        await publishState(.subscribed)
+            var connectParams: [String: JSONValue] = [
+                "minProtocol": .number(3),
+                "maxProtocol": .number(3),
+                "client": .object([
+                    "id": .string(clientID),
+                    "displayName": .string("OpenClaw iPhone"),
+                    "version": .string("0.1.0"),
+                    "platform": .string(platform),
+                    "mode": .string(clientMode),
+                    "deviceFamily": .string(deviceFamily)
+                ]),
+                "role": .string(role),
+                "scopes": .array(scopes.map(JSONValue.string)),
+                "caps": .array([]),
+                "commands": .array([]),
+                "permissions": .object([:]),
+                "locale": .string(Locale.current.identifier),
+                "userAgent": .string("openclaw-ios-operator/0.1.0")
+            ]
+
+            if let auth = authPayload(token: authToken) {
+                connectParams["auth"] = auth
+            }
+
+            let deviceAuthPayload = GatewayDeviceAuthPayload.buildV3(
+                deviceId: identity.deviceId,
+                clientId: clientID,
+                clientMode: clientMode,
+                role: role,
+                scopes: scopes,
+                signedAtMs: signedAtMs,
+                token: authToken.isEmpty ? nil : authToken,
+                nonce: connectNonce,
+                platform: platform,
+                deviceFamily: deviceFamily
+            )
+            if let signedDevice = GatewayDeviceAuthPayload.signedDeviceParams(
+                payload: deviceAuthPayload,
+                identity: identity,
+                signedAtMs: signedAtMs,
+                nonce: connectNonce
+            ) {
+                connectParams["device"] = .object(signedDevice)
+            }
+
+            let helloResponse = try await invoke(method: connectMethod, params: connectParams)
+
+            let capabilities = extractCapabilities(from: helloResponse)
+            await publishState(.authenticated(capabilities))
+            await publishState(.subscribed)
+        } catch {
+            await cleanupFailedConnect(error)
+            throw error
+        }
     }
 
     public func disconnect() async {
@@ -83,6 +166,9 @@ public actor GatewayClient: GatewayClientProtocol {
         }
 
         pendingResponses.removeAll()
+        challengeContinuation?.resume(throwing: GatewayTransportError.disconnected)
+        challengeContinuation = nil
+        latestChallenge = nil
         await transport.disconnect()
         await publishState(.disconnected(nil))
     }
@@ -185,6 +271,33 @@ public actor GatewayClient: GatewayClientProtocol {
         return "rpc-\(requestCounter)"
     }
 
+    private func waitForChallenge() async throws -> [String: JSONValue] {
+        if let latestChallenge {
+            return latestChallenge
+        }
+
+        let timeoutTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: 6_000_000_000)
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else { return }
+            await self.failChallenge(GatewayClientError.challengeTimeout)
+        }
+        defer { timeoutTask.cancel() }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            challengeContinuation = continuation
+        }
+    }
+
+    private func authPayload(token: String) -> JSONValue? {
+        guard !token.isEmpty else { return nil }
+        return .object(["token": .string(token)])
+    }
+
     private func startReceiveLoopIfNeeded() {
         guard receiveTask == nil else { return }
 
@@ -194,16 +307,41 @@ public actor GatewayClient: GatewayClientProtocol {
                     let payload = try await self.transport.receive()
                     await self.handleInbound(payload)
                 } catch {
+                    guard !Task.isCancelled else { break }
+                    await self.failChallenge(error)
+                    await self.failAllPending(error)
                     await self.publishState(.degraded(error.localizedDescription))
                     await self.publishState(.reconnecting)
                     break
                 }
             }
+
+            await self.markReceiveLoopStopped()
         }
     }
 
     private func handleInbound(_ payload: JSONValue) async {
         guard let object = payload.objectValue else { return }
+
+        if object["type"]?.stringValue == "res" {
+            await handleGatewayResponse(object)
+            return
+        }
+
+        if object["type"]?.stringValue == "event" {
+            let event = object["event"]?.stringValue ?? "unknown"
+            let eventPayload = object["payload"]?.objectValue ?? [:]
+
+            if event == "connect.challenge" {
+                latestChallenge = eventPayload
+                await publishState(.challengeReceived)
+                challengeContinuation?.resume(returning: eventPayload)
+                challengeContinuation = nil
+            }
+
+            eventContinuation.yield(GatewayServerEvent(method: event, params: eventPayload))
+            return
+        }
 
         if let errorObject = object["error"]?.objectValue {
             let id = object["id"]?.stringValue ?? ""
@@ -228,9 +366,51 @@ public actor GatewayClient: GatewayClientProtocol {
         }
     }
 
+    private func handleGatewayResponse(_ object: [String: JSONValue]) async {
+        let id = object["id"]?.stringValue ?? ""
+
+        if object["ok"]?.boolValue == false {
+            let errorObject = object["error"]?.objectValue ?? [:]
+            let message = errorObject["message"]?.stringValue
+                ?? errorObject["code"]?.stringValue
+                ?? "Gateway request failed"
+            await failPending(id: id, error: JSONRPCError(code: -1, message: message))
+            return
+        }
+
+        let continuation = pendingResponses.removeValue(forKey: id)
+        continuation?.resume(returning: object["payload"] ?? .null)
+    }
+
     private func failPending(id: String, error: Error) {
         let continuation = pendingResponses.removeValue(forKey: id)
         continuation?.resume(throwing: error)
+    }
+
+    private func failAllPending(_ error: Error) {
+        for continuation in pendingResponses.values {
+            continuation.resume(throwing: error)
+        }
+        pendingResponses.removeAll()
+    }
+
+    private func failChallenge(_ error: Error) {
+        challengeContinuation?.resume(throwing: error)
+        challengeContinuation = nil
+    }
+
+    private func markReceiveLoopStopped() {
+        receiveTask = nil
+    }
+
+    private func cleanupFailedConnect(_ error: Error) async {
+        receiveTask?.cancel()
+        receiveTask = nil
+        failChallenge(error)
+        failAllPending(error)
+        latestChallenge = nil
+        await transport.disconnect()
+        await publishState(.disconnected(error.localizedDescription))
     }
 
     private func publishState(_ event: GatewayLifecycleEvent) async {

@@ -1,15 +1,15 @@
 import Foundation
 
 public enum GatewayMethod {
-    public static let connectHello = "connect.hello"
+    public static let connectHello = "connect"
     public static let connectRefresh = "connect.refresh"
     public static let sessionsList = "sessions.list"
     public static let chatHistory = "chat.history"
     public static let chatSend = "chat.send"
-    public static let healthSnapshot = "health.snapshot"
-    public static let approvalsList = "approvals.list"
-    public static let presenceList = "presence.list"
-    public static let usageSummary = "usage.summary"
+    public static let healthSnapshot = "health"
+    public static let approvalsList = "exec.approvals.get"
+    public static let presenceList = "system-presence"
+    public static let usageSummary = "usage.status"
     public static let pushRegister = "push.register"
 }
 
@@ -26,7 +26,7 @@ public struct JSONRPCRequest: Sendable, Hashable {
 
     public var payload: JSONValue {
         .object([
-            "jsonrpc": .string("2.0"),
+            "type": .string("req"),
             "id": .string(id),
             "method": .string(method),
             "params": .object(params)

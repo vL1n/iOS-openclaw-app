@@ -14,7 +14,7 @@ struct GatewayProfileDraft: Sendable {
     var endpoint = "ws://10.84.1.2:18789"
     var transportMode: TransportMode = .localWebSocket
     var allowInsecureLocal = true
-    var requestedScopes = "chat,sessions,ops,push"
+    var requestedScopes = "operator.read,operator.write,operator.approvals"
 
     init() {}
 

@@ -29,7 +29,7 @@ public struct GatewayProfile: Identifiable, Codable, Hashable, Sendable {
         endpointURL: URL,
         transportMode: TransportMode,
         allowInsecureLocal: Bool = false,
-        requestedScopes: [String] = ["chat", "sessions", "ops", "push"],
+        requestedScopes: [String] = ["operator.read", "operator.write", "operator.approvals"],
         lastConnectedAt: Date? = nil
     ) {
         self.id = id
